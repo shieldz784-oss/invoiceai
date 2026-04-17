@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>InvoiceAI — Instant Professional Invoices</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f8f7f4;
+    --card: #ffffff;
+    --border: rgba(0,0,0,0.1);
+    --border-hover: rgba(0,0,0,0.22);
+    --text: #1a1a18;
+    --muted: #6b6b67;
+    --hint: #9b9b96;
+    --surface: #f1f0ec;
+    --accent: #1a1a18;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121210;
+      --card: #1e1e1b;
+      --border: rgba(255,255,255,0.1);
+      --border-hover: rgba(255,255,255,0.22);
+      --text: #e8e6de;
+      --muted: #8a8880;
+      --hint: #5a5855;
+      --surface: #252522;
+      --accent: #e8e6de;
+    }
+  }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem 1rem;
+  }
+  .app { max-width: 680px; margin: 0 auto; }
+  .logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 32px;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .tagline { font-size: 14px; color: var(--muted); margin-bottom: 2rem; }
+  .steps { display: flex; gap: 8px; margin-bottom: 1.5rem; }
+  .step {
+    font-size: 12px; padding: 4px 14px; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--muted);
+    transition: all 0.2s;
+  }
+  .step.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .card-label {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.07em;
+    color: var(--hint); text-transform: uppercase; margin-bottom: 1rem;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .field label { font-size: 12px; color: var(--muted); }
+  input, textarea, select {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+    resize: none;
+  }
+  input:focus, textarea:focus { border-color: var(--border-hover); }
+  .btn-primary {
+    width: 100%; padding: 14px;
+    background: var(--accent); color: var(--bg);
+    border: none; border-radius: var(--radius-sm);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px; font-weight: 500;
+    cursor: pointer; transition: opacity 0.15s;
+  }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-secondary {
+    flex: 1; padding: 11px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px; font-weight: 500;
+    color: var(--text); cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-secondary:hover { background: var(--surface); }
+  .btn-pdf {
+    flex: 1; padding: 11px;
+    background: var(--accent); color: var(--bg);
+    border: none; border-radius: var(--radius-sm);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: opacity 0.15s;
+  }
+  .btn-pdf:hover { opacity: 0.85; }
+  .action-row { display: flex; gap: 10px; margin-top: 1rem; }
+  .error { font-size: 13px; color: #c0392b; margin-top: 8px; display: none; }
+  .spinner {
+    display: inline-block; width: 15px; height: 15px;
+    border: 2px solid var(--bg); border-top-color: transparent;
+    border-radius: 50%; animation: spin 0.6s linear infinite;
+    vertical-align: middle; margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Invoice output */
+  #invoice-out { display: none; }
+  #invoice-out.visible { display: block; }
+  .inv-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; }
+  .inv-brand { font-family: 'DM Serif Display', serif; font-size: 24px; }
+  .inv-badge {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 14px;
+  }
+  .inv-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem; }
+  .inv-meta-block p { font-size: 11px; color: var(--hint); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .inv-meta-block span { font-size: 14px; font-weight: 500; color: var(--text); }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
+  th {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--hint); padding: 0 0 10px; text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th:last-child, td:last-child { text-align: right; }
+  td { font-size: 14px; padding: 10px 0; border-bottom: 1px solid var(--border); color: var(--text); }
+  .inv-total { display: flex; justify-content: flex-end; gap: 1.5rem; align-items: baseline; margin-bottom: 1.5rem; }
+  .inv-total .lbl { font-size: 13px; color: var(--muted); }
+  .inv-total .amt { font-size: 26px; font-weight: 500; }
+  .inv-note { font-size: 13px; color: var(--muted); line-height: 1.7; border-top: 1px solid var(--border); padding-top: 1rem; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="logo">InvoiceAI</div>
+  <p class="tagline">Describe your work. Get a professional invoice in seconds.</p>
+
+  <div class="steps">
+    <div class="step active" id="s1">1 · Describe</div>
+    <div class="step" id="s2">2 · Invoice</div>
+  </div>
+
+  <!-- FORM -->
+  <div id="form-section">
+    <div class="card">
+      <p class="card-label">Your details</p>
+      <div class="grid2">
+        <div class="field"><label>Your name / business</label><input id="sender" placeholder="Alex Rivera"/></div>
+        <div class="field"><label>Client name</label><input id="client" placeholder="Acme Corp"/></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Your email</label><input id="email" placeholder="alex@studio.co"/></div>
+        <div class="field"><label>Due in (days)</label><input id="due" type="number" value="14" placeholder="14"/></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="card-label">Describe the work</p>
+      <textarea id="desc" rows="4" placeholder="e.g. Designed a logo and brand kit for their new product launch. Included 3 rounds of revisions, final files in all formats. $1,200 total."></textarea>
+      <p id="err" class="error"></p>
+    </div>
+
+    <button class="btn-primary" id="genBtn" onclick="generateInvoice()">Generate Invoice</button>
+  </div>
+
+  <!-- INVOICE OUTPUT -->
+  <div id="invoice-out">
+    <div class="card" id="invoice-card">
+      <div class="inv-header">
+        <div class="inv-brand" id="inv-sender"></div>
+        <div style="text-align:right">
+          <div class="inv-badge">Invoice</div>
+          <div style="font-size:12px;color:var(--hint);margin-top:6px" id="inv-num"></div>
+        </div>
+      </div>
+      <div class="inv-meta">
+        <div class="inv-meta-block"><p>Billed to</p><span id="inv-client"></span></div>
+        <div class="inv-meta-block" style="text-align:right">
+          <p>Issue date</p><span id="inv-date"></span>
+          <p style="margin-top:8px">Due date</p><span id="inv-due"></span>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>
+        <tbody id="inv-items"></tbody>
+      </table>
+      <div class="inv-total">
+        <span class="lbl">Total due</span>
+        <span class="amt" id="inv-total"></span>
+      </div>
+      <div class="inv-note" id="inv-note"></div>
+    </div>
+    <div class="action-row">
+      <button class="btn-secondary" onclick="resetForm()">← New invoice</button>
+      <button class="btn-secondary" onclick="copyText()">Copy as text</button>
+      <button class="btn-pdf" onclick="downloadPDF()">Download PDF</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Store invoice data globally for PDF generation
+let invoiceData = {};
+
+async function generateInvoice() {
+  const sender = document.getElementById('sender').value.trim();
+  const client = document.getElementById('client').value.trim();
+  const email  = document.getElementById('email').value.trim();
+  const due    = document.getElementById('due').value || '14';
+  const desc   = document.getElementById('desc').value.trim();
+  const err    = document.getElementById('err');
+  err.style.display = 'none';
+
+  if (!desc) { err.textContent = 'Please describe the work first.'; err.style.display = 'block'; return; }
+
+  const btn = document.getElementById('genBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Generating...';
+
+  const today   = new Date();
+  const dueDate = new Date(today);
+  dueDate.setDate(dueDate.getDate() + parseInt(due));
+  const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  const prompt = `You are an invoice generation assistant. Based on the work description below, generate a structured invoice as JSON only. No markdown, no backticks, just raw JSON.
+
+Work description: "${desc}"
+Sender: "${sender || 'Freelancer'}"
+Client: "${client || 'Client'}"
+
+Return this exact JSON structure:
+{
+  "line_items": [{"description": "...", "qty": 1, "rate": 0, "amount": 0}],
+  "total": 0,
+  "note": "a short professional payment note (1-2 sentences)"
+}
+
+Rules:
+- Break the work into 1-4 logical line items
+- Infer rates and quantities from the description
+- total must equal sum of all amounts
+- note should mention payment method like bank transfer or PayPal and be friendly/professional`;
+
+  try {
+    const res  = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    const text = data.content.map(i => i.text || '').join('').replace(/```json|```/g, '').trim();
+    const inv  = JSON.parse(text);
+
+    const invNum = 'INV-' + Math.floor(1000 + Math.random() * 9000);
+    const noteText = (email ? 'Send payment to: ' + email + '. ' : '') + (inv.note || '');
+    const fmtMoney = n => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    // Store for PDF
+    invoiceData = {
+      sender: sender || 'Your Business',
+      client: client || 'Client',
+      invNum,
+      issueDate: fmt(today),
+      dueDate: fmt(dueDate),
+      items: inv.line_items,
+      total: inv.total,
+      note: noteText
+    };
+
+    // Populate UI
+    document.getElementById('inv-sender').textContent = invoiceData.sender;
+    document.getElementById('inv-client').textContent = invoiceData.client;
+    document.getElementById('inv-num').textContent    = invNum;
+    document.getElementById('inv-date').textContent   = invoiceData.issueDate;
+    document.getElementById('inv-due').textContent    = invoiceData.dueDate;
+    document.getElementById('inv-total').textContent  = fmtMoney(inv.total);
+    document.getElementById('inv-note').textContent   = noteText;
+
+    const tbody = document.getElementById('inv-items');
+    tbody.innerHTML = '';
+    inv.line_items.forEach(item => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${item.description}</td><td>${item.qty}</td><td>${fmtMoney(item.rate)}</td><td>${fmtMoney(item.amount)}</td>`;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('s1').classList.remove('active');
+    document.getElementById('s2').classList.add('active');
+    document.getElementById('form-section').style.display = 'none';
+    document.getElementById('invoice-out').classList.add('visible');
+
+  } catch(e) {
+    err.textContent = 'Something went wrong generating your invoice. Please try again.';
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Generate Invoice';
+  }
+}
+
+function downloadPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+
+  const margin  = 60;
+  const pageW   = doc.internal.pageSize.getWidth();
+  const colR    = pageW - margin;
+  let y         = 60;
+
+  const fmtMoney = n => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Header — sender name (left) + INVOICE label (right)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(22);
+  doc.setTextColor(20, 20, 18);
+  doc.text(invoiceData.sender, margin, y);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(120, 120, 115);
+  doc.text('INVOICE', colR, y, { align: 'right' });
+
+  y += 14;
+  doc.setFontSize(9);
+  doc.text(invoiceData.invNum, colR, y, { align: 'right' });
+
+  // Divider
+  y += 24;
+  doc.setDrawColor(220, 220, 215);
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, colR, y);
+
+  // Meta row
+  y += 20;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(140, 140, 135);
+  doc.text('BILLED TO', margin, y);
+  doc.text('ISSUE DATE', pageW / 2, y);
+  doc.text('DUE DATE', colR, y, { align: 'right' });
+
+  y += 14;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(20, 20, 18);
+  doc.text(invoiceData.client, margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(invoiceData.issueDate, pageW / 2, y);
+  doc.text(invoiceData.dueDate, colR, y, { align: 'right' });
+
+  // Table header
+  y += 36;
+  doc.setFillColor(245, 244, 240);
+  doc.rect(margin, y - 12, pageW - margin * 2, 24, 'F');
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 115);
+  doc.text('DESCRIPTION', margin + 8, y + 2);
+  doc.text('QTY',    pageW * 0.62, y + 2, { align: 'center' });
+  doc.text('RATE',   pageW * 0.76, y + 2, { align: 'right' });
+  doc.text('AMOUNT', colR,         y + 2, { align: 'right' });
+
+  // Table rows
+  y += 20;
+  doc.setTextColor(20, 20, 18);
+  invoiceData.items.forEach((item, i) => {
+    if (i % 2 === 1) {
+      doc.setFillColor(250, 249, 247);
+      doc.rect(margin, y - 10, pageW - margin * 2, 22, 'F');
+    }
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(item.description, margin + 8, y + 2);
+    doc.text(String(item.qty),     pageW * 0.62, y + 2, { align: 'center' });
+    doc.text(fmtMoney(item.rate),  pageW * 0.76, y + 2, { align: 'right' });
+    doc.text(fmtMoney(item.amount), colR,        y + 2, { align: 'right' });
+    y += 24;
+  });
+
+  // Total divider
+  y += 8;
+  doc.setDrawColor(220, 220, 215);
+  doc.line(margin, y, colR, y);
+  y += 20;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+  doc.setTextColor(120, 120, 115);
+  doc.text('Total due', colR - 120, y);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.setTextColor(20, 20, 18);
+  doc.text(fmtMoney(invoiceData.total), colR, y, { align: 'right' });
+
+  // Note
+  y += 36;
+  doc.setDrawColor(220, 220, 215);
+  doc.line(margin, y, colR, y);
+  y += 16;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 115);
+  const noteLines = doc.splitTextToSize(invoiceData.note, pageW - margin * 2);
+  doc.text(noteLines, margin, y);
+
+  // Footer
+  doc.setFontSize(8);
+  doc.setTextColor(180, 180, 175);
+  doc.text('Generated by InvoiceAI', pageW / 2, doc.internal.pageSize.getHeight() - 30, { align: 'center' });
+
+  doc.save(`${invoiceData.invNum}.pdf`);
+}
+
+function resetForm() {
+  document.getElementById('s1').classList.add('active');
+  document.getElementById('s2').classList.remove('active');
+  document.getElementById('form-section').style.display = 'block';
+  document.getElementById('invoice-out').classList.remove('visible');
+  document.getElementById('desc').value = '';
+}
+
+function copyText() {
+  const rows = [...document.querySelectorAll('#inv-items tr')]
+    .map(r => [...r.cells].map(c => c.textContent).join(' | ')).join('\n');
+  const text = [
+    invoiceData.sender, invoiceData.invNum,
+    'Billed to: ' + invoiceData.client,
+    'Issue: ' + invoiceData.issueDate + '  Due: ' + invoiceData.dueDate,
+    '', rows, '',
+    'Total: ' + document.getElementById('inv-total').textContent,
+    '', invoiceData.note
+  ].join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    const b = document.querySelector('.action-row .btn-secondary:nth-child(2)');
+    b.textContent = 'Copied!';
+    setTimeout(() => b.textContent = 'Copy as text', 2000);
+  });
+}
+</script>
+</body>
+</html>
